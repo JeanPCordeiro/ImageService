@@ -1,25 +1,20 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
-Description: 'myECM Global Setup'
+Description: 'ImageService Global Setup'
 
 
 ## Bucket names - override in sam deploy for custom names
 Parameters:
   TPBucketName:
     Type: String
-    Default: 'myecm-s3-tp'
+    Default: 'imageservice-s3-tp'
   BATCHBucketName:
     Type: String
-    Default: 'myecm-s3-batch'
+    Default: 'imageservice-s3-batch'
   ECSBucketName:
     Type: String
-    Default: 'myecm-s3-ecs'
-  ACQBucketName:
-    Type: String
-    Default: 'myecm-s3-acq'
-  VIEWBucketName:
-    Type: String
-    Default: 'myecm-s3-view'
+    Default: 'imageservice-s3-ecs'
+
 
 ## S3 buckets
 Resources:
@@ -30,27 +25,7 @@ Resources:
       NotificationConfiguration:
         EventBridgeConfiguration:
           EventBridgeEnabled: true
-      CorsConfiguration:
-        CorsRules:
-          - AllowedHeaders:
-              - '*'
-            AllowedMethods:
-              - GET
-              - HEAD
-              - POST
-              - PUT
-              - DELETE
-            AllowedOrigins:
-              - !Join [ "", [ "https://", !Ref ACQBucketName, ".s3-", !Ref "AWS::Region" , ".amazonaws.com" ] ]
-              - !Join [ "", [ "https://", !Ref ACQBucketName, ".s3.amazonaws.com" ] ]
-            ExposedHeaders:
-              - Date
-              - ETag
-              - x-amz-meta-custom-header
-              - x-amz-server-side-encryption
-              - x-amz-request-id
-              - x-amz-id-2
-            MaxAge: 3600
+
 
   BATCHBucket:
     Type: AWS::S3::Bucket
@@ -59,100 +34,13 @@ Resources:
       NotificationConfiguration:
         EventBridgeConfiguration:
           EventBridgeEnabled: true
-      CorsConfiguration:
-        CorsRules:
-          - AllowedHeaders:
-              - '*'
-            AllowedMethods:
-              - GET
-              - HEAD
-              - POST
-              - PUT
-              - DELETE
-            AllowedOrigins:
-              - !Join [ "", [ "https://", !Ref ACQBucketName, ".s3-", !Ref "AWS::Region" , ".amazonaws.com" ] ]
-              - !Join [ "", [ "https://", !Ref ACQBucketName, ".s3.amazonaws.com" ] ]
-            ExposedHeaders:
-              - Date
-              - ETag
-              - x-amz-meta-custom-header
-              - x-amz-server-side-encryption
-              - x-amz-request-id
-              - x-amz-id-2
-            MaxAge: 3600
+
 
   ECSBucket:
     Type: AWS::S3::Bucket
     Properties:
       BucketName: !Ref ECSBucketName
-      CorsConfiguration:
-        CorsRules:
-          - AllowedHeaders:
-              - '*'
-            AllowedMethods:
-              - GET
-              - HEAD
-              - POST
-              - PUT
-              - DELETE
-            AllowedOrigins:
-              - !Join [ "", [ "https://", !Ref ACQBucketName, ".s3-", !Ref "AWS::Region" , ".amazonaws.com" ] ]
-              - !Join [ "", [ "https://", !Ref ACQBucketName, ".s3.amazonaws.com" ] ]
-            ExposedHeaders:
-              - Date
-              - ETag
-              - x-amz-meta-custom-header
-              - x-amz-server-side-encryption
-              - x-amz-request-id
-              - x-amz-id-2
-            MaxAge: 3600
 
-  ACQBucket:
-    Type: AWS::S3::Bucket
-    Properties:
-      BucketName: !Ref ACQBucketName
-      WebsiteConfiguration:
-        IndexDocument: index.html
-        ErrorDocument: error.html
-      AccessControl: PublicRead
-
-  ACQHostingBucketPolicy:
-    Type: AWS::S3::BucketPolicy
-    Properties:
-      Bucket: !Ref ACQBucket
-      PolicyDocument:
-        Id: MyPolicy
-        Version: 2012-10-17
-        Statement:
-          - Sid: PublicReadForGetBucketObjects
-            Effect: Allow
-            Principal: "*"
-            Action: "s3:GetObject"
-            Resource: !Sub "arn:aws:s3:::${ACQBucket}/*"
-
-
-  VIEWBucket:
-    Type: AWS::S3::Bucket
-    Properties:
-      BucketName: !Ref VIEWBucketName
-      WebsiteConfiguration:
-        IndexDocument: index.html
-        ErrorDocument: index.html
-      AccessControl: PublicRead
-
-  VIEWHostingBucketPolicy:
-    Type: AWS::S3::BucketPolicy
-    Properties:
-      Bucket: !Ref VIEWBucket
-      PolicyDocument:
-        Id: MyPolicy
-        Version: 2012-10-17
-        Statement:
-          - Sid: PublicReadForGetBucketObjects
-            Effect: Allow
-            Principal: "*"
-            Action: "s3:GetObject"
-            Resource: !Sub "arn:aws:s3:::${VIEWBucket}/*"
 
 
 # Used by any target functions to access the S3
@@ -162,7 +50,7 @@ Resources:
   MyManagedPolicy:
     Type: AWS::IAM::ManagedPolicy
     Properties:
-      ManagedPolicyName: indexation-buckets-read-policy
+      ManagedPolicyName: imageservice-buckets-policy
       PolicyDocument: 
         Version: 2012-10-17
         Statement: 
@@ -180,12 +68,13 @@ Resources:
               - !Sub 'arn:aws:s3:::${BATCHBucket}/*'
               - !Sub 'arn:aws:s3:::${ECSBucket}/*'
 
+
 #
-# PARSER S3 Step
+# Compress step
 #
 
-  # EventBridge rule and permission to invoke Lambda function
-  EventRuleParseS3: 
+  # EventBridge rules 
+  EventRuleCompress: 
     Type: AWS::Events::Rule
     Properties: 
       Description: "myECM parse S3 Event"
@@ -203,276 +92,7 @@ Resources:
       Targets: 
         - Arn: 
             Fn::GetAtt: 
-              - "ParseS3eventFunction"
-              - "Arn"
-          Id: "ParseS3"            
-
-  PermissionForEventsToInvokeLambdaParseS3: 
-    Type: AWS::Lambda::Permission
-    Properties: 
-      FunctionName: 
-        Ref: "ParseS3eventFunction"
-      Action: "lambda:InvokeFunction"
-      Principal: "events.amazonaws.com"
-      SourceArn: 
-        Fn::GetAtt: 
-          - "EventRuleParseS3"
-          - "Arn"
-
-  # Lambda functions
-  ParseS3eventFunction:
-    Type: AWS::Serverless::Function
-    Properties:
-      CodeUri: parser/parserFunction/
-      Handler: app.handler
-      Runtime: nodejs12.x
-      Timeout: 5
-      MemorySize: 128
-      Policies:
-        - !Ref MyManagedPolicy
-        - Statement:
-          - Effect: Allow
-            Resource: '*'
-            Action:
-              - events:PutEvents           
-
-#
-# CONVERT TO RAW TEXT Step
-#
-  # EventBridge rules 
-  EventRulePDF: 
-    Type: AWS::Events::Rule
-    Properties: 
-      Description: "myECM converter pdf"
-      State: "ENABLED"
-      EventPattern: 
-        source: 
-          - "myecm.indexation.s3"
-        detail-type:
-          - PutObject
-        detail: 
-          type: 
-            - "pdf"
-      Targets: 
-        - Arn: 
-            Fn::GetAtt: 
-              - "ProcessPDFFunction"
-              - "Arn"
-          Id: "PDF"            
-
-  EventRuleDOCX: 
-    Type: AWS::Events::Rule
-    Properties: 
-      Description: "myECM converter docx"
-      State: "ENABLED"
-      EventPattern: 
-        source: 
-          - "myecm.indexation.s3"
-        detail-type:
-          - PutObject
-        detail: 
-          type: 
-            - "docx"
-      Targets: 
-        - Arn: 
-            Fn::GetAtt: 
-              - "ProcessDOCXFunction"
-              - "Arn"
-          Id: "DOCX"    
-
-  # EventBridge permissions to invoke Lambda functions
-  PermissionForEventsToInvokeLambdaPDF: 
-    Type: AWS::Lambda::Permission
-    Properties: 
-      FunctionName: 
-        Ref: "ProcessPDFFunction"
-      Action: "lambda:InvokeFunction"
-      Principal: "events.amazonaws.com"
-      SourceArn: 
-        Fn::GetAtt: 
-          - "EventRulePDF"
-          - "Arn"
-
-  PermissionForEventsToInvokeLambdaDOCX: 
-    Type: AWS::Lambda::Permission
-    Properties:
-      FunctionName: 
-        Ref: "ProcessDOCXFunction"
-      Action: "lambda:InvokeFunction"
-      Principal: "events.amazonaws.com"
-      SourceArn: 
-        Fn::GetAtt: 
-          - "EventRuleDOCX"
-          - "Arn"          
-
-  # Lambda functions
-  ProcessPDFFunction:
-    Type: AWS::Serverless::Function 
-    Properties:
-      CodeUri: converters/processPDF/
-      Handler: app.handler
-      Runtime: nodejs12.x
-      Timeout: 15
-      MemorySize: 512
-      Policies:
-        - !Ref MyManagedPolicy
-        - Statement:
-          - Effect: Allow
-            Resource: '*'
-            Action:
-              - events:PutEvents           
-
-  ProcessDOCXFunction:
-    Type: AWS::Serverless::Function 
-    Properties:
-      CodeUri: converters/processDOCX/
-      Handler: app.handler
-      Runtime: nodejs12.x
-      Timeout: 15
-      MemorySize: 512
-      Policies:
-        - !Ref MyManagedPolicy
-        - Statement:
-          - Effect: Allow
-            Resource: '*'
-            Action:
-              - events:PutEvents           
-
-#
-# ANALYZE DOCS Step
-#
-
-  # EventBridge rules 
-  EventRuleAnalyzeText: 
-    Type: AWS::Events::Rule
-    Properties: 
-      Description: "myECM analyze text"
-      State: "ENABLED"
-      EventPattern: 
-        source: 
-          - "myecm.converters"
-        detail-type:
-          - "NewTextBatch"
-      Targets: 
-        - Arn: 
-            Fn::GetAtt: 
-              - "AnalyzeTextFunction"
-              - "Arn"
-          Id: "AnalyzeText"            
-
-  EventRuleAnalyzeImage: 
-    Type: AWS::Events::Rule
-    Properties: 
-      Description: "myECM analyze image"
-      State: "ENABLED"
-      EventPattern: 
-        source: 
-          - "myecm.indexation.s3"
-        detail-type:
-          - PutObject
-        detail: 
-          type: 
-            - "jpg"
-            - "jpeg"
-            - "png"
-      Targets: 
-        - Arn: 
-            Fn::GetAtt: 
-              - "AnalyzeImageFunction"
-              - "Arn"
-          Id: "AnalyzeImage"    
-
-  # EventBridge permissions to invoke Lambda functions
-  PermissionForEventsToInvokeLambdaAnalyzeText: 
-    Type: AWS::Lambda::Permission
-    Properties: 
-      FunctionName: 
-        Ref: "AnalyzeTextFunction"
-      Action: "lambda:InvokeFunction"
-      Principal: "events.amazonaws.com"
-      SourceArn: 
-        Fn::GetAtt: 
-          - "EventRuleAnalyzeText"
-          - "Arn"
-
-  PermissionForEventsToInvokeLambdaAnalyzeImage: 
-    Type: AWS::Lambda::Permission
-    Properties: 
-      FunctionName: 
-        Ref: "AnalyzeImageFunction"
-      Action: "lambda:InvokeFunction"
-      Principal: "events.amazonaws.com"
-      SourceArn: 
-        Fn::GetAtt: 
-          - "EventRuleAnalyzeImage"
-          - "Arn"          
-
-  # Lambda functions
-  AnalyzeTextFunction:
-    Type: AWS::Serverless::Function 
-    Properties:
-      CodeUri: analyzers/analyzeText/
-      Handler: app.handler
-      Runtime: nodejs12.x
-      Timeout: 15
-      MemorySize: 512
-      Environment:
-        Variables:
-          language: 'en'
-      Policies:
-        - Statement:
-          - Effect: Allow
-            Resource: '*'
-            Action:
-              - events:PutEvents
-        - Statement:
-          - Effect: Allow
-            Resource: '*'
-            Action:
-              - comprehend:*              
-
-  AnalyzeImageFunction:
-    Type: AWS::Serverless::Function 
-    Properties:
-      CodeUri: analyzers/analyzeImage/
-      Handler: app.handler
-      Runtime: nodejs12.x
-      Timeout: 15
-      MemorySize: 512
-      Environment:
-        Variables:
-          MaxLabels: 5
-          MinConfidence: 70
-      Policies:
-        - !Ref MyManagedPolicy
-        - Statement:
-          - Effect: Allow
-            Resource: '*'
-            Action:
-              - events:PutEvents
-        - Statement:
-          - Effect: Allow
-            Resource: '*'
-            Action:
-              - rekognition:*                 
-
-#
-# LOAD TO DB & S3 Step
-#
-
-  # EventBridge rules 
-  EventRuleDBLoader: 
-    Type: AWS::Events::Rule
-    Properties: 
-      Description: "myECM load to DB"
-      State: "ENABLED"
-      EventPattern: 
-        source: 
-          - "myecm.analyzers"
-      Targets: 
-        - Arn: 
-            Fn::GetAtt: 
-              - "LoadToDBFunction"
+              - "CompressFunction"
               - "Arn"
           Id: "LoadToDB"            
 
@@ -481,36 +101,36 @@ Resources:
     Type: AWS::Lambda::Permission
     Properties: 
       FunctionName: 
-        Ref: "LoadToDBFunction"
+        Ref: "CompressFunction"
       Action: "lambda:InvokeFunction"
       Principal: "events.amazonaws.com"
       SourceArn: 
         Fn::GetAtt: 
-          - "EventRuleDBLoader"
+          - "EventRuleCompress"
           - "Arn"
 
   # Lambda functions
-  LoadToDBFunction:
+  CompressFunction:
     Type: AWS::Serverless::Function 
     Properties:
-      CodeUri: loaders/loadToDB/
+      CodeUri: compress/
       Handler: app.handler
-      Runtime: nodejs12.x
+      Runtime: nodejs20.x
       Timeout: 5
-      MemorySize: 128
+      MemorySize: 1024
       Policies:
       # Read more about SAM policy templates here
       # https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/serverless-policy-templates.html
        - !Ref MyManagedPolicy
        - AWSLambdaExecute
        - DynamoDBCrudPolicy:
-          TableName: !Ref MyECMDynamoDBTable
+          TableName: !Ref MyImageServiceDynamoDBTable
       Environment:
         Variables:
-          DBTableName: !Ref MyECMDynamoDBTable
+          DBTableName: !Ref MyImageServiceDynamoDBTable
           ECSBucketName: !Ref ECSBucketName
   
-  MyECMDynamoDBTable:
+  MyImageServiceDynamoDBTable:
     Type: AWS::DynamoDB::Table
     DeletionPolicy: Retain
     Properties:
@@ -542,70 +162,6 @@ Resources:
             ReadCapacityUnits: 0
             WriteCapacityUnits: 0
 
-  # Lambda functions
-  ScanAPIFunction:
-    Type: AWS::Serverless::Function 
-    Properties:
-      CodeUri: api/
-      Handler: app.handler
-      Runtime: nodejs12.x
-      Timeout: 5
-      MemorySize: 128
-      Policies:
-      # Read more about SAM policy templates here
-      # https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/serverless-policy-templates.html
-       - !Ref MyManagedPolicy
-       - AWSLambdaExecute
-       - DynamoDBCrudPolicy:
-          TableName: !Ref MyECMDynamoDBTable
-      Environment:
-        Variables:
-          DBTableName: !Ref MyECMDynamoDBTable
 
-  ScanAPIFunctionPermissions:
-    Type: AWS::Lambda::Permission
-    Properties:
-      FunctionName: !Ref ScanAPIFunction
-      Action: lambda:InvokeFunctionUrl
-      Principal: "*"
-      FunctionUrlAuthType: NONE
-  
-  ScanAPIFunctionUrl:
-    Type: AWS::Lambda::Url
-    Properties:
-      TargetFunctionArn: !Ref ScanAPIFunction
-      AuthType: NONE
-      Cors: 
-        AllowCredentials: false
-        AllowOrigins: 
-          - "*"
 
-  ScanAPIUrlParameter:
-    Type: AWS::SSM::Parameter
-    Properties:
-      Name: ScanAPIUrl
-      Type: String
-      Value: !GetAtt
-        - ScanAPIFunctionUrl
-        - FunctionUrl
-      Description: Scan API Lambda Function URL
 
-Outputs:
-  WebsiteURL:
-    Value: !GetAtt
-      - ACQBucket
-      - WebsiteURL
-    Description: URL for ACQuisition website hosted on S3
-  S3BucketSecureURL:
-    Value: !Join
-      - ''
-      - - 'https://'
-        - !GetAtt
-          - ACQBucket
-          - DomainName
-    Description: Name of S3 bucket to hold website content
-  ScanAPIURL:
-    Value: !GetAtt
-      - ScanAPIFunctionUrl
-      - FunctionUrl
-    Description: URL for Scan API

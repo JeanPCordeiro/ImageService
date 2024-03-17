@@ -1,0 +1,139 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: ImageService Global Setup
+Parameters:
+  TPBucketName:
+    Type: String
+    Default: imageservice-s3-tp
+  BATCHBucketName:
+    Type: String
+    Default: imageservice-s3-batch
+  ECSBucketName:
+    Type: String
+    Default: imageservice-s3-ecs
+Resources:
+  TPBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName:
+        Ref: TPBucketName
+      NotificationConfiguration:
+        EventBridgeConfiguration:
+          EventBridgeEnabled: true
+  BATCHBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName:
+        Ref: BATCHBucketName
+      NotificationConfiguration:
+        EventBridgeConfiguration:
+          EventBridgeEnabled: true
+  ECSBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName:
+        Ref: ECSBucketName
+  MyManagedPolicy:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      ManagedPolicyName: imageservice-buckets-policy
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Action:
+          - s3:GetObject
+          - s3:ListBucket
+          - s3:GetBucketLocation
+          - s3:GetObjectVersion
+          - s3:GetLifecycleConfiguration
+          - s3:PutObject
+          - s3:DeleteObject
+          Resource:
+          - Fn::Sub: arn:aws:s3:::${TPBucket}/*
+          - Fn::Sub: arn:aws:s3:::${BATCHBucket}/*
+          - Fn::Sub: arn:aws:s3:::${ECSBucket}/*
+  EventRuleCompress:
+    Type: AWS::Events::Rule
+    Properties:
+      Description: myECM parse S3 Event
+      State: ENABLED
+      EventPattern:
+        source:
+        - aws.s3
+        detail-type:
+        - Object Created
+        detail:
+          bucket:
+            name:
+            - Ref: TPBucketName
+            - Ref: BATCHBucketName
+      Targets:
+      - Arn:
+          Fn::GetAtt:
+          - CompressFunction
+          - Arn
+        Id: LoadToDB
+  PermissionForEventsToInvokeLambdaLoadToDB:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName:
+        Ref: CompressFunction
+      Action: lambda:InvokeFunction
+      Principal: events.amazonaws.com
+      SourceArn:
+        Fn::GetAtt:
+        - EventRuleCompress
+        - Arn
+  CompressFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: CompressFunction
+      Handler: app.handler
+      Runtime: nodejs20.x
+      Timeout: 5
+      MemorySize: 1024
+      Policies:
+      - Ref: MyManagedPolicy
+      - AWSLambdaExecute
+      - DynamoDBCrudPolicy:
+          TableName:
+            Ref: MyImageServiceDynamoDBTable
+      Environment:
+        Variables:
+          DBTableName:
+            Ref: MyImageServiceDynamoDBTable
+          ECSBucketName:
+            Ref: ECSBucketName
+    Metadata:
+      SamResourceId: CompressFunction
+  MyImageServiceDynamoDBTable:
+    Type: AWS::DynamoDB::Table
+    DeletionPolicy: Retain
+    Properties:
+      AttributeDefinitions:
+      - AttributeName: Id
+        AttributeType: S
+      - AttributeName: Type
+        AttributeType: S
+      - AttributeName: Date
+        AttributeType: S
+      KeySchema:
+      - AttributeName: Id
+        KeyType: HASH
+      - AttributeName: Date
+        KeyType: RANGE
+      BillingMode: PAY_PER_REQUEST
+      ProvisionedThroughput:
+        ReadCapacityUnits: 0
+        WriteCapacityUnits: 0
+      GlobalSecondaryIndexes:
+      - IndexName: type-index
+        KeySchema:
+        - AttributeName: Type
+          KeyType: HASH
+        Projection:
+          ProjectionType: ALL
+        ProvisionedThroughput:
+          ReadCapacityUnits: 0
+          WriteCapacityUnits: 0
