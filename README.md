@@ -14,13 +14,12 @@ This application uses an event-based architecture, with Amazon EventBridge as th
 .
 ├── README.MD             <-- This instructions file
 ├── template.yaml         <-- SAM template for Application
+├── install.sh            <-- script to launch stack
+├── uninstall.sh          <-- script to remove stack
 ├── compress              <-- Source code for Compress (using Sharp) Lambda function 
-│   └── compressJPG       <-- Converts DOCX file into text
-│   └── compressPDF       <-- Converts PDF files into text
+│   └── app.mjs           <-- lambda compression code
 │   └── package.json      <-- NodeJS dependencies and scripts
-├── parser                <-- Source code for a lambda function
-│   └── parserFunction    <-- Parses input bucket 
-│   └── package.json      <-- NodeJS dependencies and scripts
+
 ```
 
 ## Requirements
@@ -41,12 +40,12 @@ sam deploy --guided --capabilities CAPABILITY_NAMED_IAM
 Follow the prompts in the deploy process to set the stack name, AWS Region, unique bucket names, DynamoDB domain endpoint, and other parameters.
 
 
-You can also use provision and decommission scripts to fully automate the processus.
+You can also use install and uninstall scripts to fully automate the processus.
 
 ## How it works
 
-* Upload JPG or PNG files to the TP or BATCH buckets.
-* After a few seconds you will see the index in DynamoDB has been updated with labels and entities for the object and the files moved to the ECS bucket.
+* Upload JPG or PNG files to the INput bucket.
+* After a few seconds you will see the index in DynamoDB has been updated with labels and entities for the object and the files moved to the Resized bucket.
 
 ==============================================
 
