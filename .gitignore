@@ -1,3 +1,7 @@
+# AWS SAM
+.aws-sam/
+
+
 # Logs
 logs
 *.log

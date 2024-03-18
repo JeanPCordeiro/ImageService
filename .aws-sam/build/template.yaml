@@ -2,29 +2,18 @@ AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
 Description: ImageService Global Setup
 Parameters:
-  TPBucketName:
+  INBucketName:
     Type: String
-    Default: imageservice-s3-tp
-  BATCHBucketName:
+    Default: imageservice-s3
+  OUTBucketName:
     Type: String
-    Default: imageservice-s3-batch
-  ECSBucketName:
-    Type: String
-    Default: imageservice-s3-ecs
+    Default: imageservice-s3-resized
 Resources:
   TPBucket:
     Type: AWS::S3::Bucket
     Properties:
       BucketName:
-        Ref: TPBucketName
-      NotificationConfiguration:
-        EventBridgeConfiguration:
-          EventBridgeEnabled: true
-  BATCHBucket:
-    Type: AWS::S3::Bucket
-    Properties:
-      BucketName:
-        Ref: BATCHBucketName
+        Ref: INBucketName
       NotificationConfiguration:
         EventBridgeConfiguration:
           EventBridgeEnabled: true
@@ -32,7 +21,7 @@ Resources:
     Type: AWS::S3::Bucket
     Properties:
       BucketName:
-        Ref: ECSBucketName
+        Ref: OUTBucketName
   MyManagedPolicy:
     Type: AWS::IAM::ManagedPolicy
     Properties:
@@ -51,7 +40,6 @@ Resources:
           - s3:DeleteObject
           Resource:
           - Fn::Sub: arn:aws:s3:::${TPBucket}/*
-          - Fn::Sub: arn:aws:s3:::${BATCHBucket}/*
           - Fn::Sub: arn:aws:s3:::${ECSBucket}/*
   EventRuleCompress:
     Type: AWS::Events::Rule
@@ -66,8 +54,7 @@ Resources:
         detail:
           bucket:
             name:
-            - Ref: TPBucketName
-            - Ref: BATCHBucketName
+            - Ref: INBucketName
       Targets:
       - Arn:
           Fn::GetAtt:
@@ -103,8 +90,8 @@ Resources:
         Variables:
           DBTableName:
             Ref: MyImageServiceDynamoDBTable
-          ECSBucketName:
-            Ref: ECSBucketName
+          OUTBucketName:
+            Ref: OUTBucketName
     Metadata:
       SamResourceId: CompressFunction
   MyImageServiceDynamoDBTable:
