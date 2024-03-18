@@ -16,6 +16,7 @@ This application uses an event-based architecture, with Amazon EventBridge as th
 ├── template.yaml         <-- SAM template for Application
 ├── install.sh            <-- script to launch stack
 ├── uninstall.sh          <-- script to remove stack
+├── test.sh               <-- script to test 
 ├── compress              <-- Source code for Compress (using Sharp) Lambda function 
 │   └── app.mjs           <-- lambda compression code
 │   └── package.json      <-- NodeJS dependencies and scripts
