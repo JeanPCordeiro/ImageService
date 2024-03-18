@@ -2,17 +2,20 @@
 // AWS Lambda function that takes an imange on a bucket, resizes it and puts it on another bucket
 //
 
+import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
 import { GetObjectCommand, PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
+import { DynamoDBDocumentClient, PutCommand } from "@aws-sdk/lib-dynamodb";
 import sharp from 'sharp';
 import { Readable } from 'stream';
 
 // create S3 client
 const s3 = new S3Client({ region: 'us-east-1' });
+const client = new DynamoDBClient({});
+const docClient = DynamoDBDocumentClient.from(client);
 
 // The standard Lambda handler invoked when a S3 event occurs
 export const handler = async (event) => {
 
-  const key = decodeURIComponent(event.detail.object.key.replace(/\+/g, ' '))
   const srcBucket = event.detail.bucket.name;
   const srcKey = decodeURIComponent(event.detail.object.key.replace(/\+/g, ' '));
   const dstBucket = srcBucket + "-resized";
@@ -34,7 +37,7 @@ export const handler = async (event) => {
       throw new Error('Unknown object stream type');
     }
   } catch (error) {
-    console.log(error);
+    console.log("Erreur GetObject S3 : ",error);
     return;
   }
 
@@ -48,7 +51,7 @@ export const handler = async (event) => {
       .toFormat("png", { colors: 50 })
       .toBuffer();
   } catch (error) {
-    console.log(error);
+    console.log("Erreur Sharp Image : ",error);
     return;
   }
 
@@ -62,12 +65,27 @@ export const handler = async (event) => {
     };
     const putResult = await s3.send(new PutObjectCommand(destparams));
   } catch (error) {
-    console.log(error);
+    console.log("Erreur PutObject S3 : ",error);
     return;
   }
 
-  // log end of operations
-  console.log('Successfully resized ' + srcBucket + '/' + srcKey +
-    ' and uploaded to ' + dstBucket + '/' + dstKey);
+  // insert log on DynamoDB
+  try {
+    const command = new PutCommand({
+      TableName: process.env.DBTableName,
+      Item: {
+        Id: event.id,
+        Date: event.time,
+        Type: 'image',
+        File: srcKey,
+        Bucket: process.env.OUTBucketName,
+        SourceBucket: event.detail.bucket.name
+      },
+    });
+    const responseDB = await docClient.send(command);
+  } catch (error) {
+    console.log("Erreur PutCommand DynamoDB : ",error);
+    return;
+  }
 
 }

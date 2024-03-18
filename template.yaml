@@ -117,7 +117,7 @@ Resources:
     Type: AWS::DynamoDB::Table
     DeletionPolicy: Retain
     Properties:
-      #TableName: MyECMTable
+      #TableName: ImageServiceTable
       AttributeDefinitions:
         - AttributeName: Id
           AttributeType: S
